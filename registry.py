@@ -86,7 +86,7 @@ class Requests:
             if DEBUG:
                 print('[debug][auth][request] Refreshing auth token: POST {0}'.format(request_url))
 
-            try_oauth = requests.post(request_url, auth=auth, **kwargs)
+            try_oauth = requests.get(request_url, auth=auth, **kwargs)
 
             try:
                 token = ast.literal_eval(try_oauth._content)['token']
