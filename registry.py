@@ -292,7 +292,7 @@ class Registry:
 
         return tag_digest
 
-    def delete_tag(self, image_name, tag, dry_run, tag_digests_to_ignore):
+    def delete_tag(self, image_name, tag, dry_run, tag_digests_to_ignore, registry_delete):
         if dry_run:
             print('would delete tag {0}'.format(tag))
             return False
@@ -307,8 +307,10 @@ class Registry:
         if tag_digest is None:
             return False
 
-        delete_result = self.send("/v2/{0}/manifests/{1}".format(
-            image_name, tag_digest), method="DELETE")
+        print("/v2/repositories/{0}/tags/{1}/".format(image_name, tag))
+
+        delete_result = registry_delete.send("/v2/repositories/{0}/tags/{1}/".format(
+            image_name, tag), method="DELETE")
 
         if delete_result is None:
             print("failed, error: {0}".format(self.last_error))
@@ -537,7 +539,7 @@ for more detail on garbage collection read here:
 
 
 def delete_tags(
-        registry, image_name, dry_run, tags_to_delete, tags_to_keep):
+        registry, image_name, dry_run, tags_to_delete, tags_to_keep, registry_delete):
 
     keep_tag_digests = []
 
@@ -558,7 +560,7 @@ def delete_tags(
 
     def delete(tag):
         print("  deleting tag {0}".format(tag))
-        registry.delete_tag(image_name, tag, dry_run, keep_tag_digests)
+        registry.delete_tag(image_name, tag, dry_run, keep_tag_digests, registry_delete)
 
     p = ThreadPool(4)
     tasks = []
@@ -606,7 +608,7 @@ def get_tags(all_tags_list, image_name, tags_like):
     return result
 
 
-def delete_tags_by_age(registry, image_name, dry_run, hours, tags_to_keep):
+def delete_tags_by_age(registry, image_name, dry_run, hours, tags_to_keep, registry_delete):
     image_tags = registry.list_tags(image_name)
     tags_to_delete = []
     print('---------------------------------')
@@ -629,7 +631,7 @@ def delete_tags_by_age(registry, image_name, dry_run, hours, tags_to_keep):
             tags_to_delete.append(tag)
 
     print('------------deleting-------------')
-    delete_tags(registry, image_name, dry_run, tags_to_delete, tags_to_keep)
+    delete_tags(registry, image_name, dry_run, tags_to_delete, tags_to_keep, registry_delete)
 
 
 def get_newer_tags(registry, image_name, hours, tags_list):
@@ -712,6 +714,9 @@ def main_loop(args):
     registry = Registry.create(args.host, args.login, args.no_validate_ssl,
                                args.digest_method)
 
+    registry_delete = Registry.create("https://hub.docker.com", args.login, args.no_validate_ssl,
+                               args.digest_method)
+
     registry.auth_schemes = get_auth_schemes(registry,'/v2/_catalog')
 
     if args.delete:
@@ -777,13 +782,13 @@ def main_loop(args):
 
             delete_tags(
                 registry, image_name, args.dry_run,
-                tags_list_to_delete, keep_tags)
+                tags_list_to_delete, keep_tags, registry_delete)
 
         # delete tags by age in hours
         if args.delete_by_hours:
             keep_tags.extend(args.keep_tags)
             delete_tags_by_age(registry, image_name, args.dry_run,
-                               args.delete_by_hours, keep_tags)
+                               args.delete_by_hours, keep_tags, registry_delete)
 
 if __name__ == "__main__":
     args = parse_args()
